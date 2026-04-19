@@ -1,17 +1,27 @@
 """
 AgentFabric — Autonomously synthesize a multi-agent network from a single role description.
 
-Usage::
+Quickstart::
 
     from agentfabric import AgentFabric
+    from agentfabric.providers import OpenAIProvider
 
-    network = AgentFabric.create("Criminal Defense Law Firm")
+    # 1. Initialize your LLM provider
+    provider = OpenAIProvider(api_key="sk-...", model="gpt-4o")
+
+    # 2. Initialize AgentFabric
+    fabric = AgentFabric(provider)
+
+    # 3. Synthesize a network
+    network = fabric.create("Criminal Defense Law Firm")
+
+    # 4. Visualize and query
     network.visualize()
-    response = network.query("Draft a motion to suppress illegally obtained evidence.")
-    print(response)
+    result = network.query("Draft a motion to suppress illegally obtained evidence.")
+    print(result.answer)
 """
 
-from agentfabric.fabric import AgentFabric
+from agentfabric.fabric import AgentFabric, FabricNetwork
 from agentfabric.core.agent import Agent
 from agentfabric.core.network import AgentNetwork
 from agentfabric.core.topology import TopologyType
@@ -31,6 +41,7 @@ from agentfabric.providers import (
 __all__ = [
     # Core
     "AgentFabric",
+    "FabricNetwork",
     "Agent",
     "AgentNetwork",
     "TopologyType",

@@ -103,7 +103,7 @@ SUPPORTED_PROVIDERS = [
 
 
 def get_provider(
-    provider: str = "anthropic",
+    provider: str = "openai",
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     **kwargs: Any,

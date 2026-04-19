@@ -1,22 +1,34 @@
 """
 Example: Hospital Emergency Department
 
-Demonstrates broadcast mode and graphviz visualization.
-Requires ANTHROPIC_API_KEY in your environment.
+Demonstrates broadcast mode and reusing one fabric instance.
+Uses Anthropic Claude — swap to any other provider freely.
 """
 
+import os
 from agentfabric import AgentFabric
+from agentfabric.providers import AnthropicProvider
+
 
 def main():
-    print("Creating Hospital Emergency Department network...")
-    network = AgentFabric.create("Hospital Emergency Department")
+    # Initialize the LLM provider
+    provider = AnthropicProvider(
+        api_key=os.environ["ANTHROPIC_API_KEY"],
+        model="claude-sonnet-4-6",
+    )
+
+    # Initialize AgentFabric — reuse for multiple networks
+    fabric = AgentFabric(provider)
+
+    print("Synthesizing Hospital Emergency Department network...")
+    network = fabric.create("Hospital Emergency Department")
 
     print("\n--- Network Structure ---")
     print(network.describe())
-    print(f"\nTopology: {network.topology.value}")
-    print(f"Agents: {network.agent_names}")
+    print(f"Topology: {network.topology.value}")
+    print(f"Agents:   {network.agent_names}")
 
-    # Broadcast mode: all agents answer simultaneously
+    # Broadcast: all agents respond simultaneously
     print("\n--- Broadcast Query ---")
     result = network.query(
         "A 45-year-old patient arrives with chest pain and shortness of breath. "
@@ -25,7 +37,7 @@ def main():
     )
     print(result.full_report())
 
-    # Save Mermaid diagram to file
+    # Save Mermaid diagram
     network.visualize(backend="mermaid", output_path="hospital_network.md")
 
 

@@ -6,33 +6,28 @@ import argparse
 import sys
 from typing import Any
 
-from agentfabric.providers import SUPPORTED_PROVIDERS
+from agentfabric.providers import SUPPORTED_PROVIDERS, get_provider
 
 _PROVIDER_HELP = (
-    "LLM provider to use. "
-    "Supported: anthropic (default), openai, azure, gemini, bedrock, ollama, huggingface. "
-    "You can also pass 'langchain' and use --langchain-class to specify the model class."
+    "LLM provider. Supported: openai (default), anthropic, azure, gemini, "
+    "bedrock, ollama, huggingface."
 )
 
 
 def _add_common_provider_args(p: argparse.ArgumentParser) -> None:
-    """Add the shared provider/credentials flags to a subcommand parser."""
-    p.add_argument("--provider", default="anthropic", help=_PROVIDER_HELP)
-    p.add_argument("--model", default=None, help="Model ID (depends on provider)")
+    p.add_argument("--provider", default="openai", help=_PROVIDER_HELP)
+    p.add_argument("--model", default=None, help="Model ID (provider-specific)")
     p.add_argument("--api-key", default=None, dest="api_key", help="API key / token")
-    # Azure-specific
     p.add_argument("--azure-endpoint", default=None, dest="azure_endpoint",
-                   help="[Azure] Endpoint URL, e.g. https://my.openai.azure.com/")
+                   help="[Azure] Endpoint URL")
     p.add_argument("--azure-deployment", default=None, dest="azure_deployment",
-                   help="[Azure] Deployment name (not the model name)")
+                   help="[Azure] Deployment name")
     p.add_argument("--api-version", default=None, dest="api_version",
-                   help="[Azure] API version, default 2024-02-01")
-    # Bedrock-specific
+                   help="[Azure] API version")
     p.add_argument("--region", default=None, dest="region_name",
-                   help="[Bedrock] AWS region, e.g. us-east-1")
-    # Ollama-specific
+                   help="[Bedrock] AWS region")
     p.add_argument("--ollama-host", default=None, dest="ollama_host",
-                   help="[Ollama] Server URL, default http://localhost:11434")
+                   help="[Ollama] Server URL (default: http://localhost:11434)")
 
 
 def main() -> None:
@@ -42,11 +37,11 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Anthropic (default)
-  agentfabric create "Criminal Defense Law Firm"
+  # OpenAI (default)
+  agentfabric create "Criminal Defense Law Firm" --api-key sk-...
 
-  # OpenAI
-  agentfabric create "Hospital" --provider openai --model gpt-4o --api-key sk-...
+  # Anthropic
+  agentfabric create "Hospital" --provider anthropic --api-key sk-ant-...
 
   # Azure OpenAI
   agentfabric create "Law Firm" --provider azure \\
@@ -56,7 +51,7 @@ Examples:
   # Google Gemini
   agentfabric create "Research Lab" --provider gemini --api-key AIza...
 
-  # AWS Bedrock (uses ~/.aws credentials by default)
+  # AWS Bedrock (uses ~/.aws credentials)
   agentfabric create "Healthcare" --provider bedrock --region us-east-1
 
   # Ollama (local, no key needed)
@@ -67,15 +62,14 @@ Examples:
       --model meta-llama/Meta-Llama-3.1-8B-Instruct --api-key hf_...
 
   # Query a network
-  agentfabric query "Law Firm" "Draft a motion to suppress evidence." --full-report
+  agentfabric query "Law Firm" "Draft a motion to suppress evidence." \\
+      --api-key sk-... --full-report
 """,
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    # ── agentfabric create ────────────────────────────────────────────────────
-    create_parser = subparsers.add_parser(
-        "create", help="Synthesize and describe a network"
-    )
+    # ── create ───────────────────────────────────────────────────────────────
+    create_parser = subparsers.add_parser("create", help="Synthesize and describe a network")
     create_parser.add_argument("role", help='Meta-role, e.g. "Criminal Defense Law Firm"')
     _add_common_provider_args(create_parser)
     create_parser.add_argument(
@@ -84,21 +78,19 @@ Examples:
     )
     create_parser.add_argument("--output", default=None, help="Output file path for diagram")
 
-    # ── agentfabric query ─────────────────────────────────────────────────────
-    query_parser = subparsers.add_parser(
-        "query", help="Synthesize a network and run a query through it"
-    )
+    # ── query ────────────────────────────────────────────────────────────────
+    query_parser = subparsers.add_parser("query", help="Synthesize a network and run a query")
     query_parser.add_argument("role", help="Meta-role")
     query_parser.add_argument("question", help="Question or task")
     _add_common_provider_args(query_parser)
     query_parser.add_argument("--entry-agent", default=None, dest="entry_agent",
-                              help="Name of the agent to handle the query first")
+                              help="Agent to handle the query first")
     query_parser.add_argument("--broadcast", action="store_true",
                               help="Send query to all agents in parallel")
     query_parser.add_argument("--full-report", action="store_true", dest="full_report",
                               help="Print each agent's response individually")
 
-    # ── agentfabric providers ─────────────────────────────────────────────────
+    # ── providers ─────────────────────────────────────────────────────────────
     subparsers.add_parser("providers", help="List all supported LLM providers")
 
     args = parser.parse_args()
@@ -116,18 +108,18 @@ Examples:
 
 def _list_providers() -> None:
     rows = [
-        ("anthropic",    "AnthropicProvider",   "ANTHROPIC_API_KEY",          "claude-sonnet-4-6"),
-        ("openai",       "OpenAIProvider",       "OPENAI_API_KEY",             "gpt-4o"),
-        ("azure",        "AzureOpenAIProvider",  "AZURE_OPENAI_API_KEY + ENDPOINT", "your deployment"),
-        ("gemini",       "GeminiProvider",       "GOOGLE_API_KEY",             "gemini-1.5-flash"),
-        ("bedrock",      "BedrockProvider",      "AWS credentials",            "claude-3-5-sonnet-v2"),
-        ("ollama",       "OllamaProvider",       "(none — local server)",      "llama3.1"),
-        ("huggingface",  "HuggingFaceProvider",  "HF_TOKEN",                   "meta-llama/..."),
-        ("langchain",    "LangChainProvider",    "(depends on model)",         "any BaseChatModel"),
+        ("openai",       "OpenAIProvider",       "OPENAI_API_KEY",              "gpt-4o"),
+        ("anthropic",    "AnthropicProvider",    "ANTHROPIC_API_KEY",           "claude-sonnet-4-6"),
+        ("azure",        "AzureOpenAIProvider",  "AZURE_OPENAI_API_KEY+ENDPOINT", "your deployment"),
+        ("gemini",       "GeminiProvider",       "GOOGLE_API_KEY",              "gemini-1.5-flash"),
+        ("bedrock",      "BedrockProvider",      "AWS credentials",             "claude-3-5-sonnet-v2"),
+        ("ollama",       "OllamaProvider",       "(none — local server)",       "llama3.1"),
+        ("huggingface",  "HuggingFaceProvider",  "HF_TOKEN",                    "meta-llama/..."),
+        ("langchain",    "LangChainProvider",    "(depends on model)",          "any BaseChatModel"),
     ]
-    print("\nSupported AgentFabric Providers\n" + "=" * 60)
+    print("\nSupported AgentFabric Providers\n" + "=" * 62)
     print(f"{'Shorthand':<14} {'Class':<24} {'Credential':<30} {'Default Model'}")
-    print("-" * 90)
+    print("-" * 92)
     for r in rows:
         print(f"{r[0]:<14} {r[1]:<24} {r[2]:<30} {r[3]}")
     print(
@@ -141,7 +133,6 @@ def _list_providers() -> None:
 
 
 def _build_provider_kwargs(args) -> dict[str, Any]:
-    """Collect provider-specific kwargs from CLI args."""
     kwargs: dict[str, Any] = {}
     if getattr(args, "azure_endpoint", None):
         kwargs["azure_endpoint"] = args.azure_endpoint
@@ -175,17 +166,26 @@ def _run_command(args) -> None:
     provider_kwargs = _build_provider_kwargs(args)
 
     try:
-        print_info(f"Synthesizing network for: {args.role!r}  [{args.provider}]")
-        network = AgentFabric.create(
-            args.role,
+        llm = get_provider(
             provider=args.provider,
             model=getattr(args, "model", None),
             api_key=getattr(args, "api_key", None),
             **provider_kwargs,
         )
+        fabric = AgentFabric(llm)
     except (ValueError, TypeError) as e:
-        print(f"Error: Failed to build provider or parse blueprint — {e}", file=sys.stderr)
+        print(f"Error: Could not initialize provider — {e}", file=sys.stderr)
         print("Run 'agentfabric providers' to see all supported providers.", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        print_info(f"Synthesizing network for: {args.role!r}  [{args.provider}]")
+        network = fabric.create(args.role)
+    except (ValueError, TypeError) as e:
+        print(f"Error: Failed to parse network blueprint — {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

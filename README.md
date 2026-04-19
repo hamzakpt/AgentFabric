@@ -11,8 +11,18 @@ AgentFabric flips traditional multi-agent system design: instead of manually def
 
 ```python
 from agentfabric import AgentFabric
+from agentfabric.providers import OpenAIProvider
 
-network = AgentFabric.create("Criminal Defense Law Firm")
+# 1. Initialize your LLM provider
+provider = OpenAIProvider(api_key="sk-...", model="gpt-4o")
+
+# 2. Initialize AgentFabric
+fabric = AgentFabric(provider)
+
+# 3. Synthesize a network
+network = fabric.create("Criminal Defense Law Firm")
+
+# 4. Visualize and query
 network.visualize()
 result = network.query("Draft a motion to suppress evidence from an illegal search.")
 print(result.answer)
@@ -106,38 +116,52 @@ export HF_TOKEN="hf_..."               # HuggingFace
 
 ## Quickstart
 
-### Basic Usage
+### Three-step pattern
+
+Every usage follows the same pattern — regardless of which LLM you choose:
 
 ```python
 from agentfabric import AgentFabric
+from agentfabric.providers import OpenAIProvider   # ← swap to any provider
 
-# Synthesize a network
-network = AgentFabric.create("Hospital Emergency Department")
+# Step 1: initialize your LLM provider
+provider = OpenAIProvider(api_key="sk-...", model="gpt-4o")
 
-# Inspect the structure
-print(network.describe())
+# Step 2: initialize AgentFabric
+fabric = AgentFabric(provider)
 
-# Visualize (prints Mermaid diagram)
-network.visualize()
-
-# Run a query
-result = network.query(
-    "A 45-year-old patient arrives with chest pain and shortness of breath. "
-    "What immediate steps should each department take?"
-)
-print(result.answer)
+# Step 3: synthesize a network
+network = fabric.create("Hospital Emergency Department")
 ```
 
-### Broadcast Mode
-
-Query all agents simultaneously and get a unified report:
+### Inspect and visualize
 
 ```python
-result = network.query("Status check — what are each team's priorities?", broadcast=True)
+print(network.describe())     # agents + topology summary
+network.visualize()            # prints Mermaid diagram to stdout
+network.visualize(backend="mermaid", output_path="network.md")  # save to file
+```
+
+### Query the network
+
+```python
+result = network.query(
+    "A 45-year-old patient arrives with chest pain. "
+    "What should each department do immediately?"
+)
+print(result.answer)            # primary response
+print(result.full_report())     # every agent's individual response
+print(result.routed_path)       # which agents handled it
+```
+
+### Broadcast mode — all agents respond in parallel
+
+```python
+result = network.query("Status check — priorities for each team?", broadcast=True)
 print(result.full_report())
 ```
 
-### Target a Specific Agent
+### Target a specific agent
 
 ```python
 result = network.query(
@@ -145,7 +169,16 @@ result = network.query(
     entry_agent="ContractReviewer",
 )
 print(result.answer)
-print(f"Handled by: {' → '.join(result.routed_path)}")
+```
+
+### Reuse one fabric for multiple networks
+
+```python
+fabric = AgentFabric(OpenAIProvider(api_key="sk-..."))
+
+law_firm  = fabric.create("Criminal Defense Law Firm")
+hospital  = fabric.create("Hospital Emergency Department")
+school    = fabric.create("High School Operations")
 ```
 
 ### Async API
@@ -153,10 +186,13 @@ print(f"Handled by: {' → '.join(result.routed_path)}")
 ```python
 import asyncio
 from agentfabric import AgentFabric
+from agentfabric.providers import OpenAIProvider
 
 async def main():
-    network = await AgentFabric.create_async("Software Engineering Team")
-    result = await network.query_async("Plan the architecture for our new microservice.")
+    provider = OpenAIProvider(api_key="sk-...")
+    fabric   = AgentFabric(provider)
+    network  = await fabric.create_async("Software Engineering Team")
+    result   = await network.query_async("Plan the architecture for our new microservice.")
     print(result.answer)
 
 asyncio.run(main())
@@ -179,68 +215,61 @@ AgentFabric supports every major LLM platform. All providers share the same API 
 | `HuggingFaceProvider` | `agentfabric[huggingface]` | `HF_TOKEN` | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
 | `LangChainProvider` | `langchain-core` + integration | _(depends on model)_ | any `BaseChatModel` |
 
-### Anthropic / Claude (default)
+### OpenAI / GPT (default)
 
 ```python
-from agentfabric.providers import AnthropicProvider
-
-network = AgentFabric.create(
-    "Law Firm",
-    provider=AnthropicProvider(api_key="sk-ant-...", model="claude-opus-4-7"),
-)
-# or use the string shorthand:
-network = AgentFabric.create("Law Firm", provider="anthropic", model="claude-opus-4-7")
-```
-
-### OpenAI / GPT
-
-```python
+from agentfabric import AgentFabric
 from agentfabric.providers import OpenAIProvider
 
-network = AgentFabric.create(
-    "Law Firm",
-    provider=OpenAIProvider(api_key="sk-...", model="gpt-4o"),
-)
+provider = OpenAIProvider(api_key="sk-...", model="gpt-4o")
+fabric   = AgentFabric(provider)
+network  = fabric.create("Law Firm")
+```
+
+### Anthropic / Claude
+
+```python
+from agentfabric import AgentFabric
+from agentfabric.providers import AnthropicProvider
+
+provider = AnthropicProvider(api_key="sk-ant-...", model="claude-opus-4-7")
+fabric   = AgentFabric(provider)
+network  = fabric.create("Law Firm")
 ```
 
 ### Azure OpenAI
 
-```python
+```bash
 pip install agentfabric[azure]
 ```
 
 ```python
+from agentfabric import AgentFabric
 from agentfabric.providers import AzureOpenAIProvider
 
-network = AgentFabric.create(
-    "Law Firm",
-    provider=AzureOpenAIProvider(
-        azure_endpoint="https://my-resource.openai.azure.com/",
-        azure_deployment="gpt-4o-prod",   # your deployment name
-        api_key="your-azure-key",
-        api_version="2024-02-01",
-    ),
+provider = AzureOpenAIProvider(
+    azure_endpoint="https://my-resource.openai.azure.com/",
+    azure_deployment="gpt-4o-prod",   # your Azure deployment name
+    api_key="your-azure-key",
+    api_version="2024-02-01",
 )
-# CLI:
-# agentfabric create "Law Firm" --provider azure \
-#   --azure-endpoint https://my.openai.azure.com/ \
-#   --azure-deployment gpt-4o-prod --api-key <key>
+fabric  = AgentFabric(provider)
+network = fabric.create("Law Firm")
 ```
 
 ### Google Gemini
 
-```python
+```bash
 pip install agentfabric[gemini]
 ```
 
 ```python
+from agentfabric import AgentFabric
 from agentfabric.providers import GeminiProvider
 
-network = AgentFabric.create(
-    "Research Lab",
-    provider=GeminiProvider(api_key="AIza...", model="gemini-1.5-pro"),
-)
-# or: provider="gemini", api_key="AIza..."
+provider = GeminiProvider(api_key="AIza...", model="gemini-1.5-pro")
+fabric   = AgentFabric(provider)
+network  = fabric.create("Research Lab")
 ```
 
 ### AWS Bedrock
@@ -253,15 +282,15 @@ aws configure   # or set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 ```
 
 ```python
+from agentfabric import AgentFabric
 from agentfabric.providers import BedrockProvider
 
-network = AgentFabric.create(
-    "Healthcare Network",
-    provider=BedrockProvider(
-        model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
-        region_name="us-east-1",
-    ),
+provider = BedrockProvider(
+    model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    region_name="us-east-1",
 )
+fabric  = AgentFabric(provider)
+network = fabric.create("Healthcare Network")
 ```
 
 ### Ollama (local, no API key)
@@ -270,17 +299,16 @@ Run any open-source model locally — Llama 3, Mistral, Phi-3, Qwen, Gemma, Deep
 
 ```bash
 pip install agentfabric[ollama]
-ollama serve
-ollama pull llama3.1
+ollama serve && ollama pull llama3.1
 ```
 
 ```python
+from agentfabric import AgentFabric
 from agentfabric.providers import OllamaProvider
 
-network = AgentFabric.create(
-    "Software Team",
-    provider=OllamaProvider(model="llama3.1"),  # no API key needed
-)
+provider = OllamaProvider(model="llama3.1")   # no API key needed
+fabric   = AgentFabric(provider)
+network  = fabric.create("Software Team")
 ```
 
 ### HuggingFace Inference API
@@ -290,15 +318,15 @@ pip install agentfabric[huggingface]
 ```
 
 ```python
+from agentfabric import AgentFabric
 from agentfabric.providers import HuggingFaceProvider
 
-network = AgentFabric.create(
-    "Research Lab",
-    provider=HuggingFaceProvider(
-        model="meta-llama/Meta-Llama-3.1-8B-Instruct",
-        api_key="hf_...",
-    ),
+provider = HuggingFaceProvider(
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    api_key="hf_...",
 )
+fabric  = AgentFabric(provider)
+network = fabric.create("Research Lab")
 ```
 
 ### Any LangChain Model
@@ -311,14 +339,12 @@ pip install langchain-core langchain-mistralai  # (or your integration)
 
 ```python
 from langchain_mistralai import ChatMistralAI
+from agentfabric import AgentFabric
 from agentfabric.providers import LangChainProvider
 
-network = AgentFabric.create(
-    "Research Team",
-    provider=LangChainProvider(
-        ChatMistralAI(api_key="...", model="mistral-large-latest")
-    ),
-)
+provider = LangChainProvider(ChatMistralAI(api_key="...", model="mistral-large-latest"))
+fabric   = AgentFabric(provider)
+network  = fabric.create("Research Team")
 ```
 
 ### Custom Provider
@@ -337,7 +363,9 @@ class MyProvider(LLMProvider):
         # Call your LLM API here
         return "response text"
 
-network = AgentFabric.create("Research Team", provider=MyProvider())
+provider = MyProvider()
+fabric   = AgentFabric(provider)
+network  = fabric.create("Research Team")
 ```
 
 ---

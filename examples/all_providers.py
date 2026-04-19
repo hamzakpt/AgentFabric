@@ -2,97 +2,76 @@
 Example: All Supported LLM Providers
 
 Shows how to initialize AgentFabric with every supported LLM provider.
-Uncomment the provider you want to use and set the required credentials.
+The API is identical regardless of which provider you choose —
+only the initialization step differs.
 """
 
 from agentfabric import AgentFabric
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Anthropic / Claude (default)
-#    pip install agentfabric
-#    export ANTHROPIC_API_KEY="sk-ant-..."
+# STEP 1: Initialize the LLM provider of your choice
 # ─────────────────────────────────────────────────────────────────────────────
-from agentfabric.providers import AnthropicProvider
 
-provider = AnthropicProvider(
-    api_key="sk-ant-...",           # or set ANTHROPIC_API_KEY env var
-    model="claude-sonnet-4-6",      # or "claude-opus-4-7", "claude-haiku-4-5-20251001"
+# ── OpenAI (default recommended) ────────────────────────────────────────────
+from agentfabric.providers import OpenAIProvider
+provider = OpenAIProvider(
+    api_key="sk-...",          # or set OPENAI_API_KEY env var
+    model="gpt-4o",            # or "gpt-4o-mini", "o1", "o3-mini"
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. OpenAI / GPT
-#    pip install agentfabric
-#    export OPENAI_API_KEY="sk-..."
-# ─────────────────────────────────────────────────────────────────────────────
-# from agentfabric.providers import OpenAIProvider
-# provider = OpenAIProvider(
-#     api_key="sk-...",
-#     model="gpt-4o",               # or "gpt-4o-mini", "o1", "o3-mini"
+# ── Anthropic / Claude ───────────────────────────────────────────────────────
+# from agentfabric.providers import AnthropicProvider
+# provider = AnthropicProvider(
+#     api_key="sk-ant-...",          # or set ANTHROPIC_API_KEY env var
+#     model="claude-sonnet-4-6",     # or "claude-opus-4-7", "claude-haiku-4-5-20251001"
 # )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. Azure OpenAI
-#    pip install agentfabric[azure]
-#    export AZURE_OPENAI_API_KEY="..."
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Azure OpenAI ─────────────────────────────────────────────────────────────
+# pip install agentfabric[azure]
 # from agentfabric.providers import AzureOpenAIProvider
 # provider = AzureOpenAIProvider(
 #     azure_endpoint="https://my-resource.openai.azure.com/",
-#     azure_deployment="gpt-4o-prod",   # your deployment name
+#     azure_deployment="gpt-4o-prod",   # your deployment name in Azure portal
 #     api_key="your-azure-key",
 #     api_version="2024-02-01",
 # )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. Google Gemini
-#    pip install agentfabric[gemini]
-#    export GOOGLE_API_KEY="AIza..."
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Google Gemini ────────────────────────────────────────────────────────────
+# pip install agentfabric[gemini]
 # from agentfabric.providers import GeminiProvider
 # provider = GeminiProvider(
-#     api_key="AIza...",
-#     model="gemini-1.5-pro",       # or "gemini-2.0-flash", "gemini-2.5-pro"
+#     api_key="AIza...",             # or set GOOGLE_API_KEY env var
+#     model="gemini-1.5-pro",        # or "gemini-2.0-flash", "gemini-2.5-pro"
 # )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. AWS Bedrock (Claude, Llama, Mistral, Titan, and more)
-#    pip install agentfabric[bedrock]
-#    Configure AWS credentials: aws configure  (or use IAM role)
-# ─────────────────────────────────────────────────────────────────────────────
+# ── AWS Bedrock ──────────────────────────────────────────────────────────────
+# pip install agentfabric[bedrock]
 # from agentfabric.providers import BedrockProvider
 # provider = BedrockProvider(
 #     model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
 #     region_name="us-east-1",
-#     # aws_access_key_id="...",    # optional — uses credential chain if omitted
-#     # aws_secret_access_key="...",
+#     # aws_access_key_id and aws_secret_access_key optional — uses credential chain
 # )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 6. Ollama — local inference, no API key needed
-#    pip install agentfabric[ollama]
-#    ollama serve && ollama pull llama3.1
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Ollama (local, no API key needed) ────────────────────────────────────────
+# pip install agentfabric[ollama]
+# ollama serve && ollama pull llama3.1
 # from agentfabric.providers import OllamaProvider
 # provider = OllamaProvider(
-#     model="llama3.1",             # or "mistral", "phi3", "qwen2.5", "gemma2"
+#     model="llama3.1",              # or "mistral", "phi3", "qwen2.5", "gemma2"
 #     host="http://localhost:11434",
 # )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 7. HuggingFace Inference API
-#    pip install agentfabric[huggingface]
-#    export HF_TOKEN="hf_..."
-# ─────────────────────────────────────────────────────────────────────────────
+# ── HuggingFace Inference API ────────────────────────────────────────────────
+# pip install agentfabric[huggingface]
 # from agentfabric.providers import HuggingFaceProvider
 # provider = HuggingFaceProvider(
 #     model="meta-llama/Meta-Llama-3.1-8B-Instruct",
-#     api_key="hf_...",
+#     api_key="hf_...",              # or set HF_TOKEN env var
 # )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 8. Any LangChain BaseChatModel (Mistral, Cohere, Together AI, etc.)
-#    pip install langchain-core langchain-mistralai
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Any LangChain BaseChatModel ──────────────────────────────────────────────
+# pip install langchain-core langchain-mistralai
 # from langchain_mistralai import ChatMistralAI
 # from agentfabric.providers import LangChainProvider
 # provider = LangChainProvider(
@@ -100,23 +79,16 @@ provider = AnthropicProvider(
 # )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# String shorthand — uses get_provider() internally
+# STEP 2: Initialize AgentFabric with your provider
 # ─────────────────────────────────────────────────────────────────────────────
-# network = AgentFabric.create("Law Firm", provider="openai", model="gpt-4o", api_key="sk-...")
-# network = AgentFabric.create("Law Firm", provider="gemini", api_key="AIza...")
-# network = AgentFabric.create("Law Firm", provider="ollama", model="llama3.1")
-# network = AgentFabric.create(
-#     "Law Firm", provider="azure",
-#     azure_endpoint="https://my.openai.azure.com/",
-#     azure_deployment="gpt-4o",
-#     api_key="..."
-# )
+fabric = AgentFabric(provider)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Create network and run a query (same API regardless of provider)
+# STEP 3: Synthesize networks and query — same API for every provider
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    network = AgentFabric.create("Criminal Defense Law Firm", provider=provider)
+    # You can create multiple networks from one fabric instance
+    network = fabric.create("Criminal Defense Law Firm")
 
     print(network.describe())
     network.visualize(backend="mermaid")

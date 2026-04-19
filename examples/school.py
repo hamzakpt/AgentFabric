@@ -1,34 +1,37 @@
 """
-Example: High School Operations
+Example: High School Operations — async API
 
-Demonstrates async usage and OpenAI provider.
-Requires OPENAI_API_KEY in your environment (or swap to AnthropicProvider).
+Demonstrates create_async() and query_async().
 """
 
 import asyncio
+import os
 from agentfabric import AgentFabric
+from agentfabric.providers import OpenAIProvider
 
 
 async def main():
-    print("Creating High School Operations network (async)...")
-    network = await AgentFabric.create_async(
-        "High School Operations",
-        provider="anthropic",   # swap to "openai" if preferred
+    # Initialize provider and AgentFabric
+    provider = OpenAIProvider(
+        api_key=os.environ["OPENAI_API_KEY"],
+        model="gpt-4o",
     )
+    fabric = AgentFabric(provider)
+
+    print("Synthesizing High School Operations network (async)...")
+    network = await fabric.create_async("High School Operations")
 
     print("\n--- Network Structure ---")
     print(network.describe())
 
-    # Target a specific agent directly
+    # Target a specific agent
     result = await network.query_async(
-        "A student has been consistently absent for 2 weeks. "
-        "Parents are not responding to emails. What is the protocol?",
+        "A student has been absent for 2 weeks and parents aren't responding. "
+        "What is the escalation protocol?",
         entry_agent=network.agent_names[0],
     )
     print("\n--- Response ---")
     print(result.answer)
-
-    # Show routing path
     print(f"\nHandled by: {' → '.join(result.routed_path)}")
 
 
