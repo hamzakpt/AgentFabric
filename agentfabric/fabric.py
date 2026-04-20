@@ -28,7 +28,7 @@ from typing import Optional
 
 from agentfabric.core.architect import MetaArchitect, NetworkBlueprint
 from agentfabric.core.factory import AgentFactory
-from agentfabric.core.network import AgentNetwork, NetworkQueryResult
+from agentfabric.core.network import AgentNetwork, HumanInputFn, NetworkQueryResult, QuerySession
 from agentfabric.providers.base import LLMProvider
 from agentfabric.utils.logger import get_logger
 
@@ -180,7 +180,7 @@ class AgentFabric:
         logger.info(f"Creating network for role: {meta_role!r}")
         blueprint = self._architect.decompose_sync(meta_role)
         agents = self._factory.build(blueprint)
-        network = AgentNetwork(blueprint=blueprint, agents=agents)
+        network = AgentNetwork(blueprint=blueprint, agents=agents, provider=self._provider)
         return FabricNetwork(network=network, blueprint=blueprint)
 
     async def create_async(self, meta_role: str) -> "FabricNetwork":
@@ -196,7 +196,7 @@ class AgentFabric:
         logger.info(f"Creating network (async) for role: {meta_role!r}")
         blueprint = await self._architect.decompose(meta_role)
         agents = self._factory.build(blueprint)
-        network = AgentNetwork(blueprint=blueprint, agents=agents)
+        network = AgentNetwork(blueprint=blueprint, agents=agents, provider=self._provider)
         return FabricNetwork(network=network, blueprint=blueprint)
 
     def __repr__(self) -> str:
@@ -228,6 +228,8 @@ class FabricNetwork:
         user_query: str,
         entry_agent: Optional[str] = None,
         broadcast: bool = False,
+        human_input_fn: Optional[HumanInputFn] = None,
+        synthesize: bool = True,
     ) -> NetworkQueryResult:
         """
         Route a query through the agent network.
@@ -243,6 +245,16 @@ class FabricNetwork:
         broadcast:
             If ``True``, all agents receive the query in parallel and their
             responses are merged into a single result.
+        human_input_fn:
+            Optional callable ``(questions: list[str]) -> str``.
+            When provided, the network will detect missing critical context
+            (e.g. jurisdiction, language version) BEFORE routing and call
+            this function to collect the user's answers.  Supports both
+            sync and async callables.
+        synthesize:
+            If ``True`` (default), multiple agent responses are automatically
+            synthesised into ONE coherent final answer.  Set to ``False`` to
+            receive raw per-agent responses.
 
         Returns
         -------
@@ -251,23 +263,42 @@ class FabricNetwork:
             agent's response), and ``.routed_path`` (list of agent names that
             handled the query).
 
-        Example::
+        Example — with human-in-the-loop clarification::
 
-            result = network.query("Draft a motion to suppress evidence.")
+            def ask_user(questions):
+                for q in questions:
+                    print(f"  • {q}")
+                return input("Your answer: ")
+
+            result = network.query(
+                "What are the penalties for tax evasion?",
+                human_input_fn=ask_user,
+            )
             print(result.answer)
-            print(result.full_report())   # each agent's individual response
         """
-        return self._network.query(user_query, entry_agent=entry_agent, broadcast=broadcast)
+        return self._network.query(
+            user_query,
+            entry_agent=entry_agent,
+            broadcast=broadcast,
+            human_input_fn=human_input_fn,
+            synthesize=synthesize,
+        )
 
     async def query_async(
         self,
         user_query: str,
         entry_agent: Optional[str] = None,
         broadcast: bool = False,
+        human_input_fn: Optional[HumanInputFn] = None,
+        synthesize: bool = True,
     ) -> NetworkQueryResult:
         """Async version of :meth:`query`."""
         return await self._network.query_async(
-            user_query, entry_agent=entry_agent, broadcast=broadcast
+            user_query,
+            entry_agent=entry_agent,
+            broadcast=broadcast,
+            human_input_fn=human_input_fn,
+            synthesize=synthesize,
         )
 
     def describe(self) -> str:
@@ -364,6 +395,33 @@ class FabricNetwork:
 
     def get_agent(self, name: str):
         return self._network.get_agent(name)
+
+    def create_session(self, query: str) -> QuerySession:
+        """
+        Create a stateful QuerySession for the given query.
+
+        The query is stored once.  Call ``session.run()`` (or ``await
+        session.run_async()``) to execute — with optional human-in-the-loop
+        clarification across multiple rounds.
+
+        Example::
+
+            session = network.create_session(
+                "What are the penalties for tax evasion?"
+            )
+
+            # Preview what the network would ask before running
+            print(session.pending_questions())
+
+            # Run with clarification callback
+            result = session.run(human_input_fn=my_callback)
+            print(result.answer)
+
+            # Full conversation transcript
+            for turn in session.history:
+                print(turn["role"], ":", turn["content"])
+        """
+        return self._network.create_session(query)
 
     def __repr__(self) -> str:
         return (

@@ -25,6 +25,7 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = [
     # Core framework deps — always installed
+    "nest_asyncio>=1.5",
     "networkx>=3.0",
     "pydantic>=2.0",
     "rich>=13.0",

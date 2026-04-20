@@ -65,5 +65,6 @@ class AgentFactory:
             responsibilities=spec.responsibilities,
             tools=spec.tools,
             constraints=spec.constraints,
+            knowledge_mode=getattr(spec, "knowledge_mode", "grounded"),
         )
         return Agent(role=role, provider=self.provider)

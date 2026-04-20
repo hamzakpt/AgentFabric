@@ -3,12 +3,42 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 from agentfabric.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Preamble injected into every agent whose knowledge_mode is "grounded".
+# Grounded agents must not draw on LLM pre-training — they only use what
+# the user explicitly provides.  When critical context is absent they must
+# ask rather than assume (e.g. jurisdiction, time-period, specific entity).
+_GROUNDED_PREAMBLE = """\
+=== KNOWLEDGE MODE: GROUNDED ===
+You MUST NOT use any information from your pre-training knowledge base unless
+the user explicitly instructs you to use your general knowledge.
+Only rely on facts stated in the current conversation.
+
+CRITICAL CONTEXT RULE: If the user's query is missing context that would
+significantly change the answer (e.g. jurisdiction/country/state for legal
+matters, patient demographics for medical, currency/region for financial,
+platform/version for technical), do NOT guess or assume — instead respond
+with:
+  NEEDS CLARIFICATION: <list each specific question on a new line>
+
+Do not provide a substantive answer until all critical context is known.
+=================================
+
+"""
+
+_INFORMED_PREAMBLE = """\
+=== KNOWLEDGE MODE: INFORMED ===
+You may use your pre-training knowledge, but always prefer explicit
+information provided by the user in the current conversation.
+=================================
+
+"""
 
 
 class AgentRole(BaseModel):
@@ -21,6 +51,7 @@ class AgentRole(BaseModel):
     tools: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     system_prompt: str = ""
+    knowledge_mode: Literal["grounded", "informed"] = "grounded"
 
 
 class AgentMessage(BaseModel):
@@ -73,21 +104,33 @@ class Agent:
 
     def _build_system_prompt(self) -> str:
         if self.role.system_prompt:
-            return self.role.system_prompt
+            # Custom prompts still get the knowledge-mode preamble prepended.
+            preamble = (
+                _GROUNDED_PREAMBLE
+                if self.role.knowledge_mode == "grounded"
+                else _INFORMED_PREAMBLE
+            )
+            return preamble + self.role.system_prompt
 
+        preamble = (
+            _GROUNDED_PREAMBLE
+            if self.role.knowledge_mode == "grounded"
+            else _INFORMED_PREAMBLE
+        )
         responsibilities = "\n".join(f"  - {r}" for r in self.role.responsibilities)
         constraints = "\n".join(f"  - {c}" for c in self.role.constraints)
         tools = ", ".join(self.role.tools) if self.role.tools else "none"
 
         return (
-            f"You are {self.role.name}, a {self.role.sub_role}.\n\n"
+            preamble
+            + f"You are {self.role.name}, a {self.role.sub_role}.\n\n"
             f"{self.role.description}\n\n"
             f"Your responsibilities:\n{responsibilities}\n\n"
             f"Your constraints:\n{constraints}\n\n"
             f"Available tools: {tools}\n\n"
             "Always respond in character and stay within your area of expertise. "
             "When a query falls outside your domain, clearly state which colleague "
-            "should handle it."
+            "should handle it instead of answering yourself."
         )
 
     async def process(self, message: AgentMessage) -> AgentResponse:

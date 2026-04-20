@@ -23,6 +23,7 @@ class SubAgentSpec(BaseModel):
     responsibilities: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
+    knowledge_mode: str = "grounded"
 
 
 class NetworkBlueprint(BaseModel):
@@ -38,12 +39,46 @@ class NetworkBlueprint(BaseModel):
 _ARCHITECT_SYSTEM_PROMPT = """\
 You are the Meta-Architect of an autonomous multi-agent system (MAS) framework.
 
-Your task: given a high-level "Meta-Role" (e.g., "Criminal Defense Law Firm"), perform
-a functional domain decomposition to produce a complete, ready-to-run agent network.
+Your task: given a high-level "Meta-Role" (e.g., "School Administration" or
+"Criminal Defense Law Firm"), perform a functional domain decomposition to
+produce a complete, ready-to-run agent network.
 
 You must return ONLY a valid JSON object — no markdown, no commentary, no code fences.
 
-Required JSON schema:
+=== MANDATORY DESIGN RULES ===
+
+1. COORDINATOR AGENT (required in every network)
+   - Always include exactly one agent named "Coordinator".
+   - sub_role: "Query Router & Synthesiser"
+   - Its job: receive every incoming query, decide which specialist agent(s)
+     should handle it, collect their responses, and synthesise ONE final answer.
+   - In star/hierarchical topologies the Coordinator is the hub node.
+
+2. CONTEXT-AWARENESS (required for every specialist agent)
+   - Each specialist agent must have this responsibility:
+     "Identify missing critical context (jurisdiction, date, version, etc.) and
+      request clarification before answering — never assume."
+   - Each specialist agent must have this constraint:
+     "knowledge_mode: grounded — do not use pre-training knowledge unless the
+      user explicitly says to use general knowledge."
+
+3. DOMAIN-SPECIFIC CONTEXT VARIABLES
+   Think carefully about what context variables are critical for this domain:
+   - Legal     → jurisdiction (country/state), governing law, incident date
+   - Medical   → country/healthcare system, patient demographics
+   - Financial → country/region, currency, fiscal year
+   - Technical → OS, language/framework version, environment
+   - Academic  → country, institution type, admission year
+   These must appear as responsibilities in the relevant specialist agents.
+
+4. TOPOLOGY CHOICE
+   star         → one clear coordinator hub (most common)
+   pipeline     → strict sequential handoff (e.g. intake → review → decision)
+   mesh         → every agent peers with every other (e.g. research networks)
+   hierarchical → layered authority (e.g. principal → heads → teachers)
+   custom       → mixed patterns
+
+=== JSON SCHEMA ===
 {
   "meta_role": "<the original role string>",
   "topology_type": "<star|pipeline|mesh|hierarchical|custom>",
@@ -55,7 +90,11 @@ Required JSON schema:
       "description": "<what this agent does in 1-2 sentences>",
       "responsibilities": ["<responsibility 1>", "..."],
       "tools": ["<tool 1>", "..."],
-      "constraints": ["<constraint 1>", "..."]
+      "constraints": [
+        "knowledge_mode: grounded — only use explicitly provided information",
+        "Always ask for missing critical context before answering",
+        "<additional domain-specific constraints>"
+      ]
     }
   ],
   "edges": [
@@ -68,16 +107,11 @@ Required JSON schema:
   ]
 }
 
-Guidelines:
+Additional guidelines:
 - Produce 3 to 8 specialized agents (scale with domain complexity).
-- Choose topology thoughtfully:
-    star        → one clear coordinator/hub
-    pipeline    → strict sequential handoff
-    mesh        → every agent needs peer access
-    hierarchical → layered authority structure
-    custom      → mixed or irregular patterns
+- The Coordinator must have edges TO every specialist agent.
 - Edges must reference only agent names defined in the "agents" array.
-- Keep names unique, short, and in PascalCase (e.g., LeadAttorney, ITSupport).
+- Keep names unique, short, and in PascalCase (e.g., LeadAttorney, PaymentDept).
 - Return ONLY the JSON object.
 """
 
@@ -120,6 +154,25 @@ class MetaArchitect:
 
     def decompose_sync(self, meta_role: str) -> NetworkBlueprint:
         import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Inside Jupyter or another running event loop — use nest_asyncio
+            try:
+                import nest_asyncio
+                nest_asyncio.apply()
+            except ImportError:
+                raise ImportError(
+                    "Running inside an active event loop (e.g. Jupyter). "
+                    "Install nest_asyncio to use the sync API:\n"
+                    "  pip install nest_asyncio\n"
+                    "Or use 'await fabric.create_async(...)' instead."
+                )
+            return loop.run_until_complete(self.decompose(meta_role))
+
         return asyncio.run(self.decompose(meta_role))
 
     # ------------------------------------------------------------------
@@ -136,8 +189,17 @@ class MetaArchitect:
         except ValueError:
             topology = TopologyType.CUSTOM
 
-        # Parse agents
-        agents = [SubAgentSpec(**a) for a in data.get("agents", [])]
+        # Parse agents — infer knowledge_mode from constraints if not explicit
+        raw_agents = data.get("agents", [])
+        agents: list[SubAgentSpec] = []
+        for a in raw_agents:
+            if "knowledge_mode" not in a:
+                # If any constraint mentions "informed" mode, honour it
+                constraints_text = " ".join(a.get("constraints", [])).lower()
+                a["knowledge_mode"] = (
+                    "informed" if "informed" in constraints_text else "grounded"
+                )
+            agents.append(SubAgentSpec(**a))
 
         if len(agents) < 2:
             raise ValueError(
